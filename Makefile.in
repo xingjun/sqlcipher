@@ -138,7 +138,8 @@ CRYPTOLIBOBJ = \
   crypto_impl.lo \
   crypto_openssl.lo \
   crypto_libtomcrypt.lo \
-  crypto_cc.lo
+  crypto_cc.lo \
+  crypto_vfs.lo
   
 CRYPTOSRC = \
   $(TOP)/src/crypto.h \
@@ -147,7 +148,8 @@ CRYPTOSRC = \
   $(TOP)/src/crypto_impl.c \
 	$(TOP)/src/crypto_libtomcrypt.c \
 	$(TOP)/src/crypto_openssl.c \
-	$(TOP)/src/crypto_cc.c
+	$(TOP)/src/crypto_cc.c \
+	$(TOP)/src/crypto_vfs.c
 
 # END CRYPTO
 
@@ -605,6 +607,8 @@ crypto_libtomcrypt.lo:	$(TOP)/src/crypto_libtomcrypt.c $(HDR)
 	$(LTCOMPILE) -c $(TOP)/src/crypto_libtomcrypt.c
 crypto_cc.lo:	$(TOP)/src/crypto_cc.c $(HDR)
 	$(LTCOMPILE) -c $(TOP)/src/crypto_cc.c
+crypto_vfs.lo:	$(TOP)/src/crypto_vfs.c $(HDR)
+	$(LTCOMPILE) -c $(TOP)/src/crypto_vfs.c
 # END CRYPTO
 
 # Rules to build individual *.o files from files in the src directory.

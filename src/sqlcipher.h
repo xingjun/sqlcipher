@@ -69,6 +69,22 @@ void sqlcipher_free(void *, int);
 int sqlcipher_register_provider(sqlcipher_provider *p);
 sqlcipher_provider* sqlcipher_get_provider();
 
+typedef struct sqlcipherVfs_info sqlcipherVfs_info;
+struct sqlcipherVfs_info {
+  sqlite3_vfs *pRootVfs;
+  sqlite3_vfs *pSqlcipherVfs;
+  int reserve_sz;
+  int kdf_iter;
+};
+
+typedef struct sqlcipherVfs_file sqlcipherVfs_file;
+struct sqlcipherVfs_file {
+  sqlite3_file base;
+  sqlcipherVfs_info *pInfo;
+  sqlite3_file *pReal;
+};
+
+
 #endif
 #endif
 /* END SQLCIPHER */

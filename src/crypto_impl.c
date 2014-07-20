@@ -618,6 +618,8 @@ int sqlcipher_codec_ctx_get_pagesize(codec_ctx *ctx) {
 int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_file *fd, const void *zKey, int nKey) {
   int rc;
   codec_ctx *ctx;
+  sqlcipherVfs_file *sFd = (sqlcipherVfs_file *) fd;
+
   *iCtx = sqlcipher_malloc(sizeof(codec_ctx));
   ctx = *iCtx;
 
@@ -650,8 +652,11 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
   if((rc = sqlcipher_cipher_ctx_init(&ctx->read_ctx)) != SQLITE_OK) return rc; 
   if((rc = sqlcipher_cipher_ctx_init(&ctx->write_ctx)) != SQLITE_OK) return rc; 
 
+//fprintf(stderr, "kdf_iter=%d reserve_sz=%d\n", sFd->pInfo->kdf_iter, sFd->pInfo->reserve_sz);
+
   if(fd == NULL || sqlite3OsRead(fd, ctx->kdf_salt, FILE_HEADER_SZ, 0) != SQLITE_OK) {
     ctx->need_kdf_salt = 1;
+//    sFd->pReal->pMethods->xWrite(sFd->pReal, &sFd->pInfo->kdf_iter, sizeof(sFd->pInfo->kdf_iter), 0);
   }
 
   if((rc = sqlcipher_codec_ctx_set_cipher(ctx, CIPHER, 0)) != SQLITE_OK) return rc;

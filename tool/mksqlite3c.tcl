@@ -238,6 +238,7 @@ foreach file {
    crypto_libtomcrypt.c
    crypto_openssl.c
    crypto_cc.c
+   crypto_vfs.c
 
    global.c
    ctime.c

@@ -3684,6 +3684,13 @@ int main(int argc, char **argv){
   }
   data.out = stdout;
 
+
+#ifdef SQLITE_HAS_CODEC
+      //fprintf(stderr, "calling sqlcipherVfs_register\n");
+      extern int sqlcipherVfs_register(const char *zOldVfsName);
+      sqlcipherVfs_register(NULL);
+#endif
+
   /* Go ahead and open the database file if it already exists.  If the
   ** file does not exist, delay opening it.  This prevents empty database
   ** files from being created if a user mistypes the database name argument
