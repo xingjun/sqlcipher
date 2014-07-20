@@ -3,6 +3,13 @@
 #include "sqlite3.h"
 #include "sqlcipher.h"
 
+#ifdef SQLCIPHER_VFS_DEBUG
+#define SQLCIPHER_VFS_TRACE(X)  {printf X;fflush(stdout);}
+#else
+#define SQLCIPHER_VFS_TRACE(X)
+#endif
+
+
 static const char sqlcipherMagic[] = "SQLCipher Format 4.0.0.0.0.0.0.0";
 
 /* these four sqlite3_file functions account for header allocation */
@@ -34,8 +41,7 @@ static int sqlcipherVfsRead(
   sqlite_int64 iOfst
 ){
   sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
-  sqlcipherVfs_info *pInfo = p->pInfo;
-  return p->pReal->pMethods->xRead(p->pReal, zBuf, iAmt, iOfst + pInfo->reserve_sz);
+  return p->pReal->pMethods->xRead(p->pReal, zBuf, iAmt, iOfst + p->reserve_sz);
 }
 
 static int sqlcipherVfsWrite(
@@ -45,31 +51,28 @@ static int sqlcipherVfsWrite(
   sqlite_int64 iOfst
 ){
   sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
-  sqlcipherVfs_info *pInfo = p->pInfo;
-  if(pInfo->reserve_sz == 32 && iOfst == 0) {
+  if(p->reserve_sz == 32 && iOfst == 0) {
     // write the header of the file when offset 0 is written 
     if(p->pReal->pMethods->xWrite(p->pReal, sqlcipherMagic, 32, 0) == SQLITE_OK) {
-      fprintf(stderr, "wrote file header\n");
+      SQLCIPHER_VFS_TRACE(("wrote file header\n"));
     } else {
-      fprintf(stderr, "file header write failed!\n");
+      SQLCIPHER_VFS_TRACE(("file header write failed!\n"));
     }
   }
-  return p->pReal->pMethods->xWrite(p->pReal, zBuf, iAmt, iOfst + pInfo->reserve_sz);
+  return p->pReal->pMethods->xWrite(p->pReal, zBuf, iAmt, iOfst + p->reserve_sz);
 }
 
 static int sqlcipherVfsTruncate(sqlite3_file *pFile, sqlite_int64 size){
   sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
-  sqlcipherVfs_info *pInfo = p->pInfo;
-  return p->pReal->pMethods->xTruncate(p->pReal, size + pInfo->reserve_sz);
+  return p->pReal->pMethods->xTruncate(p->pReal, size + p->reserve_sz);
 }
 
 static int sqlcipherVfsFileSize(sqlite3_file *pFile, sqlite_int64 *pSize){
   sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
-  sqlcipherVfs_info *pInfo = p->pInfo;
   int rc;
   sqlite_int64 rSize;
   rc = p->pReal->pMethods->xFileSize(p->pReal, &rSize);
-  *pSize = rSize - pInfo->reserve_sz;
+  *pSize = rSize - p->reserve_sz;
   return rc;
 }
 
@@ -151,7 +154,7 @@ static int sqlcipherVfsOpen(
   unsigned char magic[32];
   sqlite_int64 fsize;
 
-  fprintf(stderr, "sqlcipherVfsOpen\n");
+  SQLCIPHER_VFS_TRACE(("sqlcipherVfsOpen\n"));
 
   sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
   sqlcipherVfs_info *pInfo = (sqlcipherVfs_info*)pVfs->pAppData;
@@ -162,20 +165,20 @@ static int sqlcipherVfsOpen(
 
 
   if(p->pReal->pMethods->xRead(p->pReal, magic, 32, 0) == SQLITE_OK) {
-    fprintf(stderr, "read 32 bytes from file header\n");
+    SQLCIPHER_VFS_TRACE(("read 32 bytes from file header\n"));
     // file exists and read first 32 bytes, compare to magic;
     if(memcmp(magic, sqlcipherMagic, 32) == 0) {
-      fprintf(stderr, "file header magic matches setting reserve size to 32\n");
-      pInfo->reserve_sz = 32;
+      SQLCIPHER_VFS_TRACE(("file header magic matches setting reserve size to 32\n"));
+      p->reserve_sz = 32;
     } else {
-      fprintf(stderr, "file header does not match magic setting reserve size to 0\n");
-      pInfo->reserve_sz = 0;
+      SQLCIPHER_VFS_TRACE(("file header does not match magic setting reserve size to 0\n"));
+      p->reserve_sz = 0;
     }
   } else if (p->pReal->pMethods->xFileSize(p->pReal, &fsize) == SQLITE_OK && fsize == 0) {
-    fprintf(stderr, "file size is 0, database doesnt exist, setting reserve size\n");
-    pInfo->reserve_sz = 32;
+    SQLCIPHER_VFS_TRACE(("file size is 0, database doesnt exist, setting reserve size\n"));
+    p->reserve_sz = 32;
   } else {
-    fprintf(stderr, "unknown issue\n");
+    SQLCIPHER_VFS_TRACE(("unknown issue\n"));
   }
 
   /* setup some stuff for sqlcipher */
@@ -228,11 +231,11 @@ int sqlcipherVfs_register(
   int nName;
   int nByte;
 
-  fprintf(stderr, "sqlcipherVfs_register\n");
+  SQLCIPHER_VFS_TRACE(("sqlcipherVfs_register\n"));
 
   pNew = sqlite3_vfs_find(newVfsName);
   if( pNew == NULL) {
-    fprintf(stderr,"sqlcipher has not yet been registered\n");
+    SQLCIPHER_VFS_TRACE(("sqlcipher has not yet been registered\n"));
     pRoot = sqlite3_vfs_find(zOldVfsName);
     if( pRoot==0 ) return SQLITE_NOTFOUND;
     nName = strlen(newVfsName);
@@ -280,7 +283,7 @@ int sqlcipherVfs_register(
     pInfo->pSqlcipherVfs = pNew;
   } else {
     // if sqlcipher has already been registered, just ensure it's default
-    fprintf(stderr,"sqlcipher VFS has already been registered, skipping registration\n");
+    SQLCIPHER_VFS_TRACE(("sqlcipher VFS has already been registered, skipping registration\n"));
   }
 
   return sqlite3_vfs_register(pNew, 1);
