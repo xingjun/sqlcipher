@@ -1175,6 +1175,79 @@ static void sqlcipher_profile_callback(void *file, const char *sql, sqlite3_uint
   if( f ) fprintf(f, "Elapsed time:%.3f ms - %s\n", elapsed, sql);
 }
 
+static long length;
+static long total_length;
+int alarm_trigger_period = 1;
+static unsigned int alarm_triggered = 0;
+static sem_t * sem_alarm;
+typedef void (*sighandler_t)(int);
+static sighandler_t handler = NULL;
+static void sighandler(int signal);
+static void* wait_for_alarm(void* arg);
+
+long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, int seconds) {
+  length = 4000;
+  int key_sz = 20;
+  unsigned char *out;
+  char password[] = "password";
+  unsigned char salt[] = "salt";
+  int password_sz = strlen(password);
+  int salt_sz = strlen((const char *)salt);
+  out = (unsigned char *) malloc(sizeof(unsigned char) * 20);
+  int offset = 0;
+  long initial = length;
+  pthread_t thread;
+  long completed = 0;
+  total_length = 0;
+  alarm_triggered = 0;
+  alarm_trigger_period = seconds;
+  sem_alarm = sem_open("sampling_semaphore", O_CREAT, S_IRUSR | S_IWUSR, 0);
+  if(pthread_create(&thread, NULL, wait_for_alarm, NULL) != 0){
+    return SQLITE_ERROR;
+  }
+  handler = signal(SIGALRM, sighandler);
+  alarm(alarm_trigger_period);
+  if(!is_power_of_two(length)){
+    length = compute_nearest_power_of_two(length);
+  }
+  while(!alarm_triggered){
+    ctx->read_ctx->provider->kdf(ctx, (const unsigned char *)password,
+                                 password_sz, salt, salt_sz, length, key_sz, out);
+    offset = length + initial * 1.2;
+    if(!is_power_of_two(offset)){
+      length = compute_nearest_power_of_two(offset);
+    } else {
+      length = offset;
+    }
+    total_length += length;
+  }
+  free(out);
+  return total_length;  
+}
+
+long compute_nearest_power_of_two(long value){
+  return pow(2, ceil(log2(value)));
+}
+
+int is_power_of_two(long value) {
+  return (value != 0) && ((value & (value - 1)) == 0);
+}
+
+static void* wait_for_alarm(void* arg){
+  while(1){
+    sem_wait(sem_alarm);
+    alarm_triggered = 1;
+  }
+  return NULL;
+}
+
+static void sighandler(int signal){
+  if(signal == SIGALRM){
+    sem_post(sem_alarm);
+    alarm(alarm_trigger_period);
+  }
+}
+
 
 #endif
 /* END SQLCIPHER */
