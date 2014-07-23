@@ -680,7 +680,7 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
   ctx->kdf_salt = sqlcipher_malloc(ctx->kdf_salt_sz);
   if(ctx->kdf_salt == NULL) return SQLITE_NOMEM;
 
-  if(sqlite3OsRead(fd, ctx->kdf_salt, FILE_HEADER_SZ, 0) != SQLITE_OK) {
+  if(fd != NULL && sqlite3OsRead(fd, ctx->kdf_salt, FILE_HEADER_SZ, 0) != SQLITE_OK) {
     ctx->need_kdf_salt = 1;
   }
 

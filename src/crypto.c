@@ -330,7 +330,6 @@ int sqlite3CodecAttach(sqlite3* db, int nDb, const void *zKey, int nKey) {
 
     if(memcmp(vfs->zName, "sqlcipher", 9) == 0) {
       is_sqlcipher_vfs = 1;
-      fprintf(stderr, "using sqlcipher VFS!\n");
     }
 
     /* point the internal codec argument against the contet to be prepared */
