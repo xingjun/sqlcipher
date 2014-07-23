@@ -320,14 +320,21 @@ int sqlite3CodecAttach(sqlite3* db, int nDb, const void *zKey, int nKey) {
     int rc;
     Pager *pPager = pDb->pBt->pBt->pPager;
     sqlite3_file *fd = sqlite3Pager_get_fd(pPager);
+    sqlite3_vfs *vfs = sqlite3Pager_get_vfs(pPager);
+    int is_sqlcipher_vfs = 0;
     codec_ctx *ctx;
 
     sqlcipher_activate(); /* perform internal initialization for sqlcipher */
 
     sqlite3_mutex_enter(db->mutex);
 
+    if(memcmp(vfs->zName, "sqlcipher", 9) == 0) {
+      is_sqlcipher_vfs = 1;
+      fprintf(stderr, "using sqlcipher VFS!\n");
+    }
+
     /* point the internal codec argument against the contet to be prepared */
-    rc = sqlcipher_codec_ctx_init(&ctx, pDb, pDb->pBt->pBt->pPager, fd, zKey, nKey); 
+    rc = sqlcipher_codec_ctx_init(&ctx, pDb, pDb->pBt->pBt->pPager, fd, is_sqlcipher_vfs, zKey, nKey); 
 
     if(rc != SQLITE_OK) return rc; /* initialization failed, do not attach potentially corrupted context */
 

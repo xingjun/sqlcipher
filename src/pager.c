@@ -7236,6 +7236,10 @@ sqlite3_file *sqlite3Pager_get_fd(Pager *pPager) {
   return (isOpen(pPager->fd)) ? pPager->fd : NULL;
 }
 
+sqlite3_vfs *sqlite3Pager_get_vfs(Pager *pPager) {
+  return pPager->pVfs;
+}
+
 void sqlite3pager_sqlite3PagerSetCodec(
   Pager *pPager,
   void *(*xCodec)(void*,void*,Pgno,int),

@@ -78,12 +78,19 @@ struct sqlcipherVfs_info {
 typedef struct sqlcipherVfs_file sqlcipherVfs_file;
 struct sqlcipherVfs_file {
   sqlite3_file base;
-  sqlcipherVfs_info *pInfo;
-  int reserve_sz;
-  int kdf_iter;
   sqlite3_file *pReal;
+  sqlcipherVfs_info *pInfo;
+  const char *filename;
+  u32 did_read;
+  u32 needs_write;
+  u32 use_header;
+  u32 version;
+  u32 reserve_sz;
+  u32 page_sz;
+  u32 kdf_iter;
+  u32 fast_kdf_iter;
+  u32 flags;
 };
-
 
 #endif
 #endif
