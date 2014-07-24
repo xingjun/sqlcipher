@@ -1175,79 +1175,47 @@ static void sqlcipher_profile_callback(void *file, const char *sql, sqlite3_uint
   if( f ) fprintf(f, "Elapsed time:%.3f ms - %s\n", elapsed, sql);
 }
 
-static long length;
-static long total_length;
-int alarm_trigger_period = 1;
-static unsigned int alarm_triggered = 0;
-static sem_t * sem_alarm;
-typedef void (*sighandler_t)(int);
-static sighandler_t handler = NULL;
-static void sighandler(int signal);
-static void* wait_for_alarm(void* arg);
-
-long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, int seconds) {
-  length = 4000;
+long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
+  int sample_index;
   int key_sz = 20;
+  int sample_sz = 10;
+  int length = 500000;
+  struct timeval begin, end;
   unsigned char *out;
   char password[] = "password";
   unsigned char salt[] = "salt";
   int password_sz = strlen(password);
   int salt_sz = strlen((const char *)salt);
+  double runtime = 0, total_runtime = 0, average = 0;
+  double scale = 0, work_factor = 0, time_factor = 0;
+  
   out = (unsigned char *) malloc(sizeof(unsigned char) * 20);
-  int offset = 0;
-  long initial = length;
-  pthread_t thread;
-  long completed = 0;
-  total_length = 0;
-  alarm_triggered = 0;
-  alarm_trigger_period = seconds;
-  sem_alarm = sem_open("sampling_semaphore", O_CREAT, S_IRUSR | S_IWUSR, 0);
-  if(pthread_create(&thread, NULL, wait_for_alarm, NULL) != 0){
-    return SQLITE_ERROR;
-  }
-  handler = signal(SIGALRM, sighandler);
-  alarm(alarm_trigger_period);
-  if(!is_power_of_two(length)){
-    length = compute_nearest_power_of_two(length);
-  }
-  while(!alarm_triggered){
+  for(sample_index = 0; sample_index < sample_sz; sample_index++){
+    gettimeofday(&begin, NULL);
     ctx->read_ctx->provider->kdf(ctx, (const unsigned char *)password,
                                  password_sz, salt, salt_sz, length, key_sz, out);
-    offset = length + initial * 1.2;
-    if(!is_power_of_two(offset)){
-      length = compute_nearest_power_of_two(offset);
-    } else {
-      length = offset;
-    }
-    total_length += length;
+    gettimeofday(&end, NULL);
+    runtime = diff(begin, end);
+    total_runtime += runtime;
+    CODEC_TRACE(("cipher_kdf_compute run:%d time:%.3f\n",
+                 sample_index, runtime));
   }
   free(out);
-  return total_length;  
+  average = total_runtime/sample_sz;
+  CODEC_TRACE(("cipher_kdf_compute total runtime:%.3f average runtime:%.3f\n",
+               total_runtime, average));
+  time_factor = seconds * 1000;
+  scale = time_factor / average;
+  CODEC_TRACE(("time factor:%f scale:%f length:%d\n", time_factor, scale, length));
+  work_factor = scale * length;
+  return work_factor;
 }
 
-long compute_nearest_power_of_two(long value){
-  return pow(2, ceil(log2(value)));
+double diff(struct timeval begin, struct timeval end){
+  double elapsed_time;
+  elapsed_time = (end.tv_sec - begin.tv_sec) * 1000.0;
+  elapsed_time += (end.tv_usec - begin.tv_usec) / 1000.0;
+  return elapsed_time;
 }
-
-int is_power_of_two(long value) {
-  return (value != 0) && ((value & (value - 1)) == 0);
-}
-
-static void* wait_for_alarm(void* arg){
-  while(1){
-    sem_wait(sem_alarm);
-    alarm_triggered = 1;
-  }
-  return NULL;
-}
-
-static void sighandler(int signal){
-  if(signal == SIGALRM){
-    sem_post(sem_alarm);
-    alarm(alarm_trigger_period);
-  }
-}
-
-
 #endif
 /* END SQLCIPHER */

@@ -35,10 +35,8 @@
 #ifndef CRYPTO_H
 #define CRYPTO_H
 
-#include <semaphore.h>
-#include <pthread.h>
-#include <unistd.h>
 #include <math.h>
+#include <sys/time.h>
 
 #if !defined (SQLCIPHER_CRYPTO_CC) \
    && !defined (SQLCIPHER_CRYPTO_LIBTOMCRYPT) \
@@ -222,9 +220,8 @@ int sqlcipher_codec_add_random(codec_ctx *ctx, const char *data, int random_sz);
 int sqlcipher_cipher_profile(sqlite3 *db, const char *destination);
 static void sqlcipher_profile_callback(void *file, const char *sql, sqlite3_uint64 run_time);
 
-long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, int seconds);
-long compute_nearest_power_of_two(long value);
-int is_power_of_two(long value);
+long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds);
+double diff(struct timeval begin, struct timeval end);
 #endif
 #endif
 /* END SQLCIPHER */
