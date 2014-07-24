@@ -296,7 +296,16 @@ int sqlite3OsInit(void){
   void *p = sqlite3_malloc(10);
   if( p==0 ) return SQLITE_NOMEM;
   sqlite3_free(p);
+#ifdef SQLITE_HAS_CODEC
+  {
+    int rc = sqlite3_os_init();
+    extern int sqlcipherVfs_register(const char *zOldVfsName);
+    sqlcipherVfs_register(NULL);
+    return rc;
+  }
+#else
   return sqlite3_os_init();
+#endif
 }
 
 /*

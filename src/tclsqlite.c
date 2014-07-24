@@ -2925,12 +2925,6 @@ static int DbMain(void *cd, Tcl_Interp *interp, int objc,Tcl_Obj *const*objv){
 #endif
   int rc;
 
-#ifdef SQLITE_HAS_CODEC
-      extern int sqlcipherVfs_register(const char *zOldVfsName); 
-      sqlcipherVfs_register(NULL);
-#endif
-
-
   /* In normal use, each TCL interpreter runs in a single thread.  So
   ** by default, we can turn of mutexing on SQLite database connections.
   ** However, for testing purposes it is useful to have mutexes turned
