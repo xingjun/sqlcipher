@@ -84,7 +84,10 @@ struct codec_ctx {
   cipher_ctx *write_ctx;
   unsigned int skip_read_hmac;
   unsigned int need_kdf_salt;
+  sqlcipherVfs_file *vfs_file;
 };
+
+void sqlcipher_config_to_sqlcipherVfs_file(codec_ctx *ctx);
 
 int sqlcipher_register_provider(sqlcipher_provider *p) {
   sqlite3_mutex_enter(sqlcipher_provider_mutex);
@@ -477,6 +480,8 @@ int sqlcipher_codec_ctx_set_kdf_iter(codec_ctx *ctx, int kdf_iter, int for_ctx) 
   c_ctx->kdf_iter = kdf_iter;
   c_ctx->derive_key = 1;
 
+  sqlcipher_config_to_sqlcipherVfs_file(ctx);
+
   if(for_ctx == 2)
     if((rc = sqlcipher_cipher_ctx_copy( for_ctx ? ctx->read_ctx : ctx->write_ctx, c_ctx)) != SQLITE_OK)
       return rc; 
@@ -495,6 +500,8 @@ int sqlcipher_codec_ctx_set_fast_kdf_iter(codec_ctx *ctx, int fast_kdf_iter, int
 
   c_ctx->fast_kdf_iter = fast_kdf_iter;
   c_ctx->derive_key = 1;
+
+  sqlcipher_config_to_sqlcipherVfs_file(ctx);
 
   if(for_ctx == 2)
     if((rc = sqlcipher_cipher_ctx_copy( for_ctx ? ctx->read_ctx : ctx->write_ctx, c_ctx)) != SQLITE_OK)
@@ -560,12 +567,18 @@ int sqlcipher_codec_ctx_get_use_hmac(codec_ctx *ctx, int for_ctx) {
 int sqlcipher_codec_ctx_set_flag(codec_ctx *ctx, unsigned int flag) {
   ctx->write_ctx->flags |= flag;
   ctx->read_ctx->flags |= flag;
+
+  sqlcipher_config_to_sqlcipherVfs_file(ctx);
+
   return SQLITE_OK;
 }
 
 int sqlcipher_codec_ctx_unset_flag(codec_ctx *ctx, unsigned int flag) {
   ctx->write_ctx->flags &= ~flag;
   ctx->read_ctx->flags &= ~flag;
+
+  sqlcipher_config_to_sqlcipherVfs_file(ctx);
+
   return SQLITE_OK;
 }
 
@@ -608,6 +621,8 @@ int sqlcipher_codec_ctx_set_pagesize(codec_ctx *ctx, int size) {
   ctx->buffer = sqlcipher_malloc(size);
   if(ctx->buffer == NULL) return SQLITE_NOMEM;
 
+  sqlcipher_config_to_sqlcipherVfs_file(ctx);
+
   return SQLITE_OK;
 }
 
@@ -615,10 +630,40 @@ int sqlcipher_codec_ctx_get_pagesize(codec_ctx *ctx) {
   return ctx->page_sz;
 }
 
-int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_file *fd, const void *zKey, int nKey) {
+int sqlcipher_config_from_sqlcipherVfs_file(codec_ctx *ctx) {
+  /* if ctx->vfs_file is set, then the set operations will update it. therefore, we'll temporarily set it to null */
+  sqlcipherVfs_file *tmp = ctx->vfs_file;
+  ctx->vfs_file = NULL;
+
+  sqlcipher_codec_ctx_set_pagesize(ctx, tmp->page_sz);
+  sqlcipher_codec_ctx_set_kdf_iter(ctx, tmp->kdf_iter, 2);
+  sqlcipher_codec_ctx_set_fast_kdf_iter(ctx, tmp->fast_kdf_iter, 2);
+
+  /* Note that use_hmac is a special case that requires recalculation of page size */
+  sqlcipher_codec_ctx_set_use_hmac(ctx, tmp->flags & CIPHER_FLAG_HMAC);
+
+  ctx->read_ctx->flags = tmp->flags;
+  ctx->write_ctx->flags = tmp->flags;
+
+  /* now all parameters are set, restore the pointer to the vfs file */
+  ctx->vfs_file = tmp;
+
+  return SQLITE_OK;
+}
+
+void sqlcipher_config_to_sqlcipherVfs_file(codec_ctx *ctx) {
+  if(ctx->vfs_file) {
+    ctx->vfs_file->page_sz = sqlcipher_codec_ctx_get_pagesize(ctx);
+    ctx->vfs_file->kdf_iter = sqlcipher_codec_ctx_get_kdf_iter(ctx, 1);
+    ctx->vfs_file->fast_kdf_iter = sqlcipher_codec_ctx_get_fast_kdf_iter(ctx, 1);
+    ctx->vfs_file->flags = ctx->write_ctx->flags;
+    ctx->vfs_file->needs_write = 1;
+  }
+}
+
+int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_file *fd, int is_sqlcipher_vfs, const void *zKey, int nKey) {
   int rc;
   codec_ctx *ctx;
-  sqlcipherVfs_file *sFd = (sqlcipherVfs_file *) fd;
 
   *iCtx = sqlcipher_malloc(sizeof(codec_ctx));
   ctx = *iCtx;
@@ -635,12 +680,15 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
   ctx->kdf_salt = sqlcipher_malloc(ctx->kdf_salt_sz);
   if(ctx->kdf_salt == NULL) return SQLITE_NOMEM;
 
+  if(fd == NULL || sqlite3OsRead(fd, ctx->kdf_salt, FILE_HEADER_SZ, 0) != SQLITE_OK) {
+    ctx->need_kdf_salt = 1;
+  }
+
   /* allocate space for separate hmac salt data. We want the
      HMAC derivation salt to be different than the encryption
      key derivation salt */
   ctx->hmac_kdf_salt = sqlcipher_malloc(ctx->kdf_salt_sz);
   if(ctx->hmac_kdf_salt == NULL) return SQLITE_NOMEM;
-
 
   /*
      Always overwrite page size and set to the default because the first page of the database
@@ -652,13 +700,6 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
   if((rc = sqlcipher_cipher_ctx_init(&ctx->read_ctx)) != SQLITE_OK) return rc; 
   if((rc = sqlcipher_cipher_ctx_init(&ctx->write_ctx)) != SQLITE_OK) return rc; 
 
-//fprintf(stderr, "kdf_iter=%d reserve_sz=%d\n", sFd->pInfo->kdf_iter, sFd->pInfo->reserve_sz);
-
-  if(fd == NULL || sqlite3OsRead(fd, ctx->kdf_salt, FILE_HEADER_SZ, 0) != SQLITE_OK) {
-    ctx->need_kdf_salt = 1;
-//    sFd->pReal->pMethods->xWrite(sFd->pReal, &sFd->pInfo->kdf_iter, sizeof(sFd->pInfo->kdf_iter), 0);
-  }
-
   if((rc = sqlcipher_codec_ctx_set_cipher(ctx, CIPHER, 0)) != SQLITE_OK) return rc;
   if((rc = sqlcipher_codec_ctx_set_kdf_iter(ctx, default_kdf_iter, 0)) != SQLITE_OK) return rc;
   if((rc = sqlcipher_codec_ctx_set_fast_kdf_iter(ctx, FAST_PBKDF2_ITER, 0)) != SQLITE_OK) return rc;
@@ -669,6 +710,22 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
   if((rc = sqlcipher_codec_ctx_set_use_hmac(ctx, default_flags & CIPHER_FLAG_HMAC)) != SQLITE_OK) return rc;
 
   if((rc = sqlcipher_cipher_ctx_copy(ctx->write_ctx, ctx->read_ctx)) != SQLITE_OK) return rc;
+
+  /* if this is using the coupled sqlcipher vfs, make note of the underlying file handle
+   * containing the database configuration data 
+   * NOTE: fd will be NULL in the case of an in memory database */
+  if(is_sqlcipher_vfs && fd != NULL) {
+    ctx->vfs_file = (sqlcipherVfs_file *) fd;
+    ctx->vfs_file->use_header = 1;
+
+    if (ctx->vfs_file->did_read) {
+      /* overwrite default settings from header */
+      sqlcipher_config_from_sqlcipherVfs_file(ctx);
+    } else { 
+      /* prepare default settings to write */
+      sqlcipher_config_to_sqlcipherVfs_file(ctx);
+    }
+  }
 
   return SQLITE_OK;
 }

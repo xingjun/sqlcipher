@@ -126,6 +126,7 @@
 void sqlite3pager_get_codec(Pager *pPager, void **ctx);
 int sqlite3pager_is_mj_pgno(Pager *pPager, Pgno pgno);
 sqlite3_file *sqlite3Pager_get_fd(Pager *pPager);
+sqlite3_vfs *sqlite3Pager_get_vfs(Pager *pPager);
 void sqlite3pager_sqlite3PagerSetCodec(
   Pager *pPager,
   void *(*xCodec)(void*,void*,Pgno,int),
@@ -165,7 +166,7 @@ typedef struct codec_ctx codec_ctx;
 /* activation and initialization */
 void sqlcipher_activate();
 void sqlcipher_deactivate();
-int sqlcipher_codec_ctx_init(codec_ctx **, Db *, Pager *, sqlite3_file *, const void *, int);
+int sqlcipher_codec_ctx_init(codec_ctx **, Db *, Pager *, sqlite3_file *, int, const void *, int);
 void sqlcipher_codec_ctx_free(codec_ctx **);
 int sqlcipher_codec_key_derive(codec_ctx *);
 int sqlcipher_codec_key_copy(codec_ctx *, int);
