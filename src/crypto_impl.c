@@ -712,15 +712,19 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
   if((rc = sqlcipher_cipher_ctx_copy(ctx->write_ctx, ctx->read_ctx)) != SQLITE_OK) return rc;
 
   /* if this is using the coupled sqlcipher vfs, make note of the underlying file handle
-   * containing the database configuration data */
-  ctx->vfs_file = is_sqlcipher_vfs ? (sqlcipherVfs_file *) fd : NULL;
+   * containing the database configuration data 
+   * NOTE: fd will be NULL in the case of an in memory database */
+  if(is_sqlcipher_vfs && fd != NULL) {
+    ctx->vfs_file = (sqlcipherVfs_file *) fd;
+    ctx->vfs_file->use_header = 1;
 
-  if(ctx->vfs_file && ctx->vfs_file->did_read) {
-    /* overwrite default settings from header */
-    sqlcipher_config_from_sqlcipherVfs_file(ctx);
-  } else { 
-    /* prepare default settings to write */
-    sqlcipher_config_to_sqlcipherVfs_file(ctx);
+    if (ctx->vfs_file->did_read) {
+      /* overwrite default settings from header */
+      sqlcipher_config_from_sqlcipherVfs_file(ctx);
+    } else { 
+      /* prepare default settings to write */
+      sqlcipher_config_to_sqlcipherVfs_file(ctx);
+    }
   }
 
   return SQLITE_OK;
