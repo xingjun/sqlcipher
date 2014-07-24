@@ -1258,7 +1258,7 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
                  sample_index, runtime));
   }
   free(out);
-  average = total_runtime/sample_sz;
+  average = total_runtime / sample_sz;
   CODEC_TRACE(("cipher_kdf_compute total runtime:%.3f average runtime:%.3f\n",
                total_runtime, average));
   time_factor = seconds * 1000;
