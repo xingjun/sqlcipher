@@ -91,6 +91,7 @@ static int sqlcipherVfsReadHeader(sqlcipherVfs_file *file) {
     SQLCIPHER_VFS_TRACE(("file size is 0, database doesnt exist, setting reserve size\n"));
     file->use_header = 1;
     file->reserve_sz = 56;
+    file->needs_write = 1;
   } else {
     SQLCIPHER_VFS_TRACE(("unknown issue\n"));
   }
