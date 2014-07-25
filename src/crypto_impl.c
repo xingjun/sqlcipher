@@ -84,6 +84,7 @@ struct codec_ctx {
   cipher_ctx *write_ctx;
   unsigned int skip_read_hmac;
   unsigned int need_kdf_salt;
+  unsigned int skip_kdf_compute;
   sqlcipherVfs_file *vfs_file;
 };
 
@@ -721,6 +722,7 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
     if (ctx->vfs_file->did_read) {
       /* overwrite default settings from header */
       sqlcipher_config_from_sqlcipherVfs_file(ctx);
+      sqlcipher_codec_ctx_set_skip_kdf_compute(ctx, 1);
     } else { 
       /* prepare default settings to write */
       sqlcipher_config_to_sqlcipherVfs_file(ctx);
@@ -879,6 +881,7 @@ int sqlcipher_page_cipher(codec_ctx *ctx, int for_ctx, Pgno pgno, int mode, int 
   */
 static int sqlcipher_cipher_ctx_key_derive(codec_ctx *ctx, cipher_ctx *c_ctx) {
   int rc;
+  long kdf_work_factor;
   CODEC_TRACE(("cipher_ctx_key_derive: entered c_ctx->pass=%s, c_ctx->pass_sz=%d \
                 ctx->kdf_salt=%p ctx->kdf_salt_sz=%d c_ctx->kdf_iter=%d \
                 ctx->hmac_kdf_salt=%p, c_ctx->fast_kdf_iter=%d c_ctx->key_sz=%d\n", 
@@ -902,7 +905,13 @@ static int sqlcipher_cipher_ctx_key_derive(codec_ctx *ctx, cipher_ctx *c_ctx) {
       CODEC_TRACE(("cipher_ctx_key_derive: using raw key from hex\n")); 
       cipher_hex2bin(z, (c_ctx->key_sz * 2), c_ctx->key);
       cipher_hex2bin(z + (c_ctx->key_sz * 2), (ctx->kdf_salt_sz * 2), ctx->kdf_salt);
-    } else { 
+    } else {
+      if(!ctx->skip_kdf_compute) {
+        CODEC_TRACE(("computing kdf work factor\n"));
+        kdf_work_factor = sqlcipher_codec_compute_kdf_iter(ctx, 1);
+        sqlcipher_codec_ctx_set_kdf_iter(ctx, kdf_work_factor, 2);
+        ctx->skip_kdf_compute = 1;
+      }
       CODEC_TRACE(("cipher_ctx_key_derive: deriving key using full PBKDF2 with %d iterations\n", c_ctx->kdf_iter)); 
       c_ctx->provider->kdf(c_ctx->provider_ctx, c_ctx->pass, c_ctx->pass_sz, 
                     ctx->kdf_salt, ctx->kdf_salt_sz, c_ctx->kdf_iter,
@@ -1230,6 +1239,11 @@ static void sqlcipher_profile_callback(void *file, const char *sql, sqlite3_uint
   FILE *f = (FILE*)file;
   double elapsed = run_time/1000000.0;
   if( f ) fprintf(f, "Elapsed time:%.3f ms - %s\n", elapsed, sql);
+}
+
+int sqlcipher_codec_ctx_set_skip_kdf_compute(codec_ctx *ctx, int value){
+  ctx->skip_kdf_compute = value;
+  return SQLITE_OK;
 }
 
 long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {

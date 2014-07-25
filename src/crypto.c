@@ -94,6 +94,7 @@ int sqlcipher_codec_pragma(sqlite3* db, int iDb, Parse *pParse, const char *zLef
       char *kdf_iter = sqlite3_mprintf("%ld", sqlcipher_codec_compute_kdf_iter(ctx, 1));
       codec_vdbe_return_static_string(pParse, "cipher_kdf_compute", kdf_iter);
       sqlcipher_codec_ctx_set_kdf_iter(ctx, atol(kdf_iter), 2);
+      sqlcipher_codec_ctx_set_skip_kdf_compute(ctx, 1);
       sqlite3_free(kdf_iter);
     }
   } else
@@ -102,6 +103,7 @@ int sqlcipher_codec_pragma(sqlite3* db, int iDb, Parse *pParse, const char *zLef
       char *kdf_iter = sqlite3_mprintf("%ld", sqlcipher_codec_compute_kdf_iter(ctx, atof(zRight)));
       codec_vdbe_return_static_string(pParse, "cipher_kdf_compute", kdf_iter);
       sqlcipher_codec_ctx_set_kdf_iter(ctx, atol(kdf_iter), 2);
+      sqlcipher_codec_ctx_set_skip_kdf_compute(ctx, 1);
       sqlite3_free(kdf_iter);
     }
   } else
@@ -157,7 +159,8 @@ int sqlcipher_codec_pragma(sqlite3* db, int iDb, Parse *pParse, const char *zLef
   if( sqlite3StrICmp(zLeft, "kdf_iter")==0 ){
     if(ctx) {
       if( zRight ) {
-        sqlcipher_codec_ctx_set_kdf_iter(ctx, atoi(zRight), 2); // change of RW PBKDF2 iteration 
+        sqlcipher_codec_ctx_set_kdf_iter(ctx, atoi(zRight), 2); // change of RW PBKDF2 iteration
+        sqlcipher_codec_ctx_set_skip_kdf_compute(ctx, 1);
       } else {
         char *kdf_iter = sqlite3_mprintf("%d", sqlcipher_codec_ctx_get_kdf_iter(ctx, 2));
         codec_vdbe_return_static_string(pParse, "kdf_iter", kdf_iter);
