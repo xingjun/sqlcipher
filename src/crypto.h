@@ -223,6 +223,11 @@ static void sqlcipher_profile_callback(void *file, const char *sql, sqlite3_uint
 
 long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds);
 double diff(struct timeval begin, struct timeval end);
+
+static int sqlcipher_codec_get_store_pass(codec_ctx *ctx);
+static void sqlcipher_codec_get_pass(codec_ctx *ctx, void **zKey, int *nKey);
+static void sqlcipher_codec_set_store_pass(codec_ctx *ctx, int value);
+
 #endif
 #endif
 /* END SQLCIPHER */
