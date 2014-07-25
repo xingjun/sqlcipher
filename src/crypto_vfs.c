@@ -61,7 +61,7 @@ static int sqlcipherVfsReadHeader(sqlcipherVfs_file *file) {
       SQLCIPHER_VFS_TRACE(("file header magic matches setting reserve size to 32\n"));
       file->reserve_sz = sqlite3Get4byte(&magic[32]);
 
-      header = sqlite3_malloc(file->reserve_sz);
+      header = sqlcipher_malloc(file->reserve_sz);
       if(file->pReal->pMethods->xRead(file->pReal, header, file->reserve_sz, 0) == SQLITE_OK) {
         file->version = sqlite3Get4byte(header+36);
         file->page_sz = sqlite3Get4byte(header+40);
@@ -78,7 +78,7 @@ static int sqlcipherVfsReadHeader(sqlcipherVfs_file *file) {
       } else {
         SQLCIPHER_VFS_TRACE(("error reading full header header\n"));
       }
-      sqlite3_free(header);
+      sqlcipher_free(header, file->reserve_sz);
 
     } else {
       SQLCIPHER_VFS_TRACE(("file header does not match magic setting reserve size to 0\n"));
@@ -96,7 +96,7 @@ static int sqlcipherVfsReadHeader(sqlcipherVfs_file *file) {
 }
 
 static int sqlcipherVfsWriteHeader(sqlcipherVfs_file *file) {
-  unsigned char *header = sqlite3_malloc(file->reserve_sz); 
+  unsigned char *header = sqlcipher_malloc(file->reserve_sz); 
 
   memcpy(header, sqlcipherMagic, 32);
   sqlite3Put4byte(header+32, file->reserve_sz);
@@ -117,7 +117,7 @@ static int sqlcipherVfsWriteHeader(sqlcipherVfs_file *file) {
     SQLCIPHER_VFS_TRACE(("file header write failed!\n"));
   }
   
-  sqlite3_free(header);
+  sqlcipher_free(header, file->reserve_sz);
 
   return SQLITE_OK;
 }
