@@ -1308,7 +1308,7 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
   double runtime = 0, total_runtime = 0, average = 0;
   double scale = 0, work_factor = 0, time_factor = 0;
   
-  out = (unsigned char *) malloc(sizeof(unsigned char) * 20);
+  out = (unsigned char *) sqlcipher_malloc(sizeof(unsigned char) * 20);
   for(sample_index = 0; sample_index < sample_sz; sample_index++){
     gettimeofday(&begin, NULL);
     ctx->read_ctx->provider->kdf(ctx, (const unsigned char *)password,
@@ -1319,7 +1319,7 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
     CODEC_TRACE(("cipher_kdf_compute run:%d time:%.3f\n",
                  sample_index, runtime));
   }
-  free(out);
+  sqlcipher_free(out, sizeof(unsigned char) * 20);
   average = total_runtime / sample_sz;
   CODEC_TRACE(("cipher_kdf_compute total runtime:%.3f average runtime:%.3f\n",
                total_runtime, average));
