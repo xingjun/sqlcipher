@@ -952,7 +952,7 @@ static int sqlcipher_cipher_ctx_key_derive(codec_ctx *ctx, cipher_ctx *c_ctx) {
       cipher_hex2bin(z, (c_ctx->key_sz * 2), c_ctx->key);
       cipher_hex2bin(z + (c_ctx->key_sz * 2), (ctx->kdf_salt_sz * 2), ctx->kdf_salt);
     } else {
-      if(!ctx->skip_kdf_compute) {
+      if(!ctx->skip_kdf_compute && ctx->vfs_file) {
         CODEC_TRACE(("computing kdf work factor\n"));
         kdf_work_factor = sqlcipher_codec_compute_kdf_iter(ctx, 1);
         sqlcipher_codec_ctx_set_kdf_iter(ctx, kdf_work_factor, 2);
