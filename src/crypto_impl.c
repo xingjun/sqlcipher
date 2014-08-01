@@ -1327,9 +1327,8 @@ int sqlcipher_codec_ctx_set_skip_kdf_compute(codec_ctx *ctx, int value){
 
 long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
   int sample_index;
-  int key_sz = 20;
+  int length = 4096;
   int sample_sz = 10;
-  int length = 500000;
   struct timeval begin, end;
   unsigned char *out;
   char password[] = "password";
@@ -1339,18 +1338,20 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
   double runtime = 0, total_runtime = 0, average = 0;
   double scale = 0, work_factor = 0, time_factor = 0;
   
-  out = (unsigned char *) sqlcipher_malloc(sizeof(unsigned char) * 20);
+  out = (unsigned char *) sqlcipher_malloc(sizeof(unsigned char) *
+                                           ctx->read_ctx->key_sz);
   for(sample_index = 0; sample_index < sample_sz; sample_index++){
     gettimeofday(&begin, NULL);
     ctx->read_ctx->provider->kdf(ctx, (const unsigned char *)password,
-                                 password_sz, salt, salt_sz, length, key_sz, out);
+                                 password_sz, salt, salt_sz, length,
+                                 ctx->read_ctx->key_sz, out);
     gettimeofday(&end, NULL);
-    runtime = diff(begin, end);
+    runtime = sqlcipher_time_diff(begin, end);
     total_runtime += runtime;
     CODEC_TRACE(("cipher_kdf_compute run:%d time:%.3f\n",
                  sample_index, runtime));
   }
-  sqlcipher_free(out, sizeof(unsigned char) * 20);
+  sqlcipher_free(out, sizeof(unsigned char) * ctx->read_ctx->key_sz);
   average = total_runtime / sample_sz;
   CODEC_TRACE(("cipher_kdf_compute total runtime:%.3f average runtime:%.3f\n",
                total_runtime, average));
@@ -1361,8 +1362,8 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
   return work_factor;
 }
 
-double diff(struct timeval begin, struct timeval end){
-  double elapsed_time;
+static double sqlcipher_time_diff(struct timeval begin, struct timeval end){
+  double elapsed_time = 0.0;
   elapsed_time = (end.tv_sec - begin.tv_sec) * 1000.0;
   elapsed_time += (end.tv_usec - begin.tv_usec) / 1000.0;
   return elapsed_time;

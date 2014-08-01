@@ -222,7 +222,7 @@ int sqlcipher_cipher_profile(sqlite3 *db, const char *destination);
 static void sqlcipher_profile_callback(void *file, const char *sql, sqlite3_uint64 run_time);
 
 long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds);
-double diff(struct timeval begin, struct timeval end);
+static double sqlcipher_time_diff(struct timeval begin, struct timeval end);
 int sqlcipher_codec_ctx_set_skip_kdf_compute(codec_ctx *ctx, int value);
 
 static int sqlcipher_codec_get_store_pass(codec_ctx *ctx);
