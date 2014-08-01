@@ -92,15 +92,48 @@ struct codec_ctx {
 void sqlcipher_config_to_sqlcipherVfs_file(codec_ctx *ctx);
 
 int sqlcipher_register_provider(sqlcipher_provider *p) {
-  sqlite3_mutex_enter(sqlcipher_provider_mutex);
-  if(default_provider != NULL && default_provider != p) {
-    /* only free the current registerd provider if it has been initialized
-       and it isn't a pointer to the same provider passed to the function
-       (i.e. protect against a caller calling register twice for the same provider) */
-    sqlcipher_free(default_provider, sizeof(sqlcipher_provider));
+  if(sqlcipher_provider_mutex == NULL) {
+    /* allocate a new mutex to guard access to the provider */
+    sqlcipher_provider_mutex = sqlite3_mutex_alloc(SQLITE_MUTEX_FAST);
   }
-  default_provider = p;   
+
+  sqlite3_mutex_enter(sqlcipher_provider_mutex);
+
+  if(p == NULL) {
+    /* the caller passed in a NULL pointer */
+    if(default_provider == NULL) {
+      /* if there is no default_provider set already
+        then we will register the default provider */
+
+      p = sqlcipher_malloc(sizeof(sqlcipher_provider)); 
+#if defined (SQLCIPHER_CRYPTO_CC)
+      extern int sqlcipher_cc_setup(sqlcipher_provider *p);
+      sqlcipher_cc_setup(p);
+#elif defined (SQLCIPHER_CRYPTO_LIBTOMCRYPT)
+      extern int sqlcipher_ltc_setup(sqlcipher_provider *p);
+      sqlcipher_ltc_setup(p);
+#elif defined (SQLCIPHER_CRYPTO_OPENSSL)
+      extern int sqlcipher_openssl_setup(sqlcipher_provider *p);
+      sqlcipher_openssl_setup(p);
+#else
+#error "NO DEFAULT SQLCIPHER CRYPTO PROVIDER DEFINED"
+#endif
+
+      default_provider = p;   
+    }
+  } else {
+    /* the caller passed in a pointer to a new provider */
+    if(default_provider != NULL && default_provider != p) { 
+      /* only free the current registerd provider if it has been initialized
+        and it isn't a pointer to the same provider passed to the function
+        (i.e. protect against a caller calling register twice for the same provider) */
+      sqlcipher_free(default_provider, sizeof(sqlcipher_provider));
+    }
+    default_provider = p;   
+  }
+
   sqlite3_mutex_leave(sqlcipher_provider_mutex);
+
   return SQLITE_OK;
 }
 
@@ -114,30 +147,8 @@ sqlcipher_provider* sqlcipher_get_provider() {
 void sqlcipher_activate() {
   sqlite3_mutex_enter(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
 
-  if(sqlcipher_provider_mutex == NULL) {
-    /* allocate a new mutex to guard access to the provider */
-    sqlcipher_provider_mutex = sqlite3_mutex_alloc(SQLITE_MUTEX_FAST);
-  }
-
-  /* check to see if there is a provider registered at this point
-     if there no provider registered at this point, register the 
-     default provider */
-  if(sqlcipher_get_provider() == NULL) {
-    sqlcipher_provider *p = sqlcipher_malloc(sizeof(sqlcipher_provider)); 
-#if defined (SQLCIPHER_CRYPTO_CC)
-    extern int sqlcipher_cc_setup(sqlcipher_provider *p);
-    sqlcipher_cc_setup(p);
-#elif defined (SQLCIPHER_CRYPTO_LIBTOMCRYPT)
-    extern int sqlcipher_ltc_setup(sqlcipher_provider *p);
-    sqlcipher_ltc_setup(p);
-#elif defined (SQLCIPHER_CRYPTO_OPENSSL)
-    extern int sqlcipher_openssl_setup(sqlcipher_provider *p);
-    sqlcipher_openssl_setup(p);
-#else
-#error "NO DEFAULT SQLCIPHER CRYPTO PROVIDER DEFINED"
-#endif
-    sqlcipher_register_provider(p);
-  }
+  /* ensure that default provider is registered, if it's not already */
+  sqlcipher_register_provider(NULL);
 
   sqlcipher_activate_count++; /* increment activation count */
 
@@ -928,6 +939,7 @@ int sqlcipher_page_cipher(codec_ctx *ctx, int for_ctx, Pgno pgno, int mode, int 
 static int sqlcipher_cipher_ctx_key_derive(codec_ctx *ctx, cipher_ctx *c_ctx) {
   int rc;
   long kdf_work_factor;
+
   CODEC_TRACE(("cipher_ctx_key_derive: entered c_ctx->pass=%s, c_ctx->pass_sz=%d \
                 ctx->kdf_salt=%p ctx->kdf_salt_sz=%d c_ctx->kdf_iter=%d \
                 ctx->hmac_kdf_salt=%p, c_ctx->fast_kdf_iter=%d c_ctx->key_sz=%d\n", 
@@ -936,11 +948,13 @@ static int sqlcipher_cipher_ctx_key_derive(codec_ctx *ctx, cipher_ctx *c_ctx) {
                 
   
   if(c_ctx->pass && c_ctx->pass_sz) { // if pass is not null
+    unsigned char *salt = ctx->kdf_salt;
 
     if(ctx->need_kdf_salt) {
       if(ctx->read_ctx->provider->random(ctx->read_ctx->provider_ctx, ctx->kdf_salt, FILE_HEADER_SZ) != SQLITE_OK) return SQLITE_ERROR;
       ctx->need_kdf_salt = 0;
     }
+
     if (c_ctx->pass_sz == ((c_ctx->key_sz * 2) + 3) && sqlite3StrNICmp((const char *)c_ctx->pass ,"x'", 2) == 0) { 
       int n = c_ctx->pass_sz - 3; /* adjust for leading x' and tailing ' */
       const unsigned char *z = c_ctx->pass + 2; /* adjust lead offset of x' */
@@ -959,9 +973,24 @@ static int sqlcipher_cipher_ctx_key_derive(codec_ctx *ctx, cipher_ctx *c_ctx) {
         ctx->skip_kdf_compute = 1;
       }
       CODEC_TRACE(("cipher_ctx_key_derive: deriving key using full PBKDF2 with %d iterations\n", c_ctx->kdf_iter)); 
+
+      /* if there is a registered diversification callback, invoke it to permute the salt before performing key
+       * derivation using the key. Initially populate the new buffer with the current salt value, in case the 
+       * diversifier will only modify a subset of the data */
+      if(c_ctx->provider->diversify) {
+        salt = sqlcipher_malloc(ctx->kdf_salt_sz);
+        memcpy(salt, ctx->kdf_salt, ctx->kdf_salt_sz);
+        c_ctx->provider->diversify(c_ctx->provider_ctx, ctx->kdf_salt, ctx->kdf_salt_sz, salt);
+      } 
+
       c_ctx->provider->kdf(c_ctx->provider_ctx, c_ctx->pass, c_ctx->pass_sz, 
-                    ctx->kdf_salt, ctx->kdf_salt_sz, c_ctx->kdf_iter,
+                    salt, ctx->kdf_salt_sz, c_ctx->kdf_iter,
                     c_ctx->key_sz, c_ctx->key);
+
+      /* if there is a registered diversifier, free the temporary salt */
+      if(c_ctx->provider->diversify) {
+        sqlcipher_free(salt, ctx->kdf_salt_sz);
+      }
     }
 
     /* set the context "keyspec" containing the hex-formatted key and salt to be used when attaching databases */
@@ -1007,8 +1036,10 @@ int sqlcipher_codec_key_derive(codec_ctx *ctx) {
   if(ctx->write_ctx->derive_key) {
     if(sqlcipher_cipher_ctx_cmp(ctx->write_ctx, ctx->read_ctx) == 0) {
       /* the relevant parameters are the same, just copy read key */
+      CODEC_TRACE(("read and write ctx compare the same, copying context and skipping write_ctx derivation\n"));
       if(sqlcipher_cipher_ctx_copy(ctx->write_ctx, ctx->read_ctx) != SQLITE_OK) return SQLITE_ERROR;
     } else {
+      CODEC_TRACE(("read and write ctx differ, performing write_ctx derivation\n"));
       if(sqlcipher_cipher_ctx_key_derive(ctx, ctx->write_ctx) != SQLITE_OK) return SQLITE_ERROR;
     }
   }
