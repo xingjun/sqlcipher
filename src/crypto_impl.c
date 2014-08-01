@@ -1333,8 +1333,8 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
   unsigned char *out;
   char password[] = "password";
   unsigned char salt[] = "salt";
-  int password_sz = strlen(password);
-  int salt_sz = strlen((const char *)salt);
+  int password_sz = sqlite3Strlen30(password);
+  int salt_sz = sqlite3Strlen30((const char *)salt);
   double runtime = 0, total_runtime = 0, average = 0;
   double scale = 0, work_factor = 0, time_factor = 0;
   
