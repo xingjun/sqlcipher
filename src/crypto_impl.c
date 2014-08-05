@@ -1329,24 +1329,25 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
   int sample_index;
   int length = 4096;
   int sample_sz = 10;
-  struct timeval begin, end;
   unsigned char *out;
   char password[] = "password";
   unsigned char salt[] = "salt";
+  sqlite3_int64 begin = 0, end = 0;
   int password_sz = sqlite3Strlen30(password);
   int salt_sz = sqlite3Strlen30((const char *)salt);
   double runtime = 0, total_runtime = 0, average = 0;
   double scale = 0, work_factor = 0, time_factor = 0;
+  sqlite3_vfs *vfs = sqlite3_vfs_find(NULL);
   
   out = (unsigned char *) sqlcipher_malloc(sizeof(unsigned char) *
                                            ctx->read_ctx->key_sz);
   for(sample_index = 0; sample_index < sample_sz; sample_index++){
-    gettimeofday(&begin, NULL);
+    vfs->xCurrentTimeInt64(vfs, &begin);
     ctx->read_ctx->provider->kdf(ctx, (const unsigned char *)password,
                                  password_sz, salt, salt_sz, length,
                                  ctx->read_ctx->key_sz, out);
-    gettimeofday(&end, NULL);
-    runtime = sqlcipher_time_diff(begin, end);
+    vfs->xCurrentTimeInt64(vfs, &end);
+    runtime = end - begin;
     total_runtime += runtime;
     CODEC_TRACE(("cipher_kdf_compute run:%d time:%.3f\n",
                  sample_index, runtime));
@@ -1360,13 +1361,6 @@ long sqlcipher_codec_compute_kdf_iter(codec_ctx *ctx, double seconds) {
   CODEC_TRACE(("time factor:%f scale:%f length:%d\n", time_factor, scale, length));
   work_factor = scale * length;
   return work_factor;
-}
-
-static double sqlcipher_time_diff(struct timeval begin, struct timeval end){
-  double elapsed_time = 0.0;
-  elapsed_time = (end.tv_sec - begin.tv_sec) * 1000.0;
-  elapsed_time += (end.tv_usec - begin.tv_usec) / 1000.0;
-  return elapsed_time;
 }
 #endif
 /* END SQLCIPHER */
