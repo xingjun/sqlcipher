@@ -354,7 +354,7 @@ int sqlite3CodecAttach(sqlite3* db, int nDb, const void *zKey, int nKey) {
 
     sqlite3_mutex_enter(db->mutex);
 
-    if(memcmp(vfs->zName, "sqlcipher", 9) == 0) {
+    if(sqlite3StrICmp(vfs->zName, "sqlcipher")==0) {
       is_sqlcipher_vfs = 1;
     }
 
