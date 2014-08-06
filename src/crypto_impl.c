@@ -774,14 +774,19 @@ int sqlcipher_codec_ctx_init(codec_ctx **iCtx, Db *pDb, Pager *pPager, sqlite3_f
    * NOTE: fd will be NULL in the case of an in memory database */
   if(is_sqlcipher_vfs && fd != NULL) {
     ctx->vfs_file = (sqlcipherVfs_file *) fd;
-    ctx->vfs_file->use_header = 1;
 
     if (ctx->vfs_file->did_read) {
-      /* overwrite default settings from header */
+      /* VFS read file header so overwrite default settings from header */
+      ctx->vfs_file->use_header = 1;
       sqlcipher_config_from_sqlcipherVfs_file(ctx);
       sqlcipher_codec_ctx_set_skip_kdf_compute(ctx, 1);
+    } else if(ctx->vfs_file->reserve_sz == 0) {
+      /* legacy database does not contain header, use default settings and disable
+       * kdf computation */
+      sqlcipher_codec_ctx_set_skip_kdf_compute(ctx, 1);
     } else { 
-      /* prepare default settings to write */
+      /* new database file that doesn't previously exist, prepare default settings to write  to header */
+      ctx->vfs_file->use_header = 1;
       sqlcipher_config_to_sqlcipherVfs_file(ctx);
     }
   }
@@ -966,7 +971,7 @@ static int sqlcipher_cipher_ctx_key_derive(codec_ctx *ctx, cipher_ctx *c_ctx) {
       cipher_hex2bin(z, (c_ctx->key_sz * 2), c_ctx->key);
       cipher_hex2bin(z + (c_ctx->key_sz * 2), (ctx->kdf_salt_sz * 2), ctx->kdf_salt);
     } else {
-      if(!ctx->skip_kdf_compute && ctx->vfs_file) {
+      if(!ctx->skip_kdf_compute && ctx->vfs_file && ctx->vfs_file->use_header) {
         CODEC_TRACE(("computing kdf work factor\n"));
         kdf_work_factor = sqlcipher_codec_compute_kdf_iter(ctx, 1);
         sqlcipher_codec_ctx_set_kdf_iter(ctx, kdf_work_factor, 2);

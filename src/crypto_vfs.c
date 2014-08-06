@@ -9,7 +9,13 @@
 #define SQLCIPHER_VFS_TRACE(X)
 #endif
 
-static const char sqlcipherMagic[] = "SQLCipher Format 4.0.0.0.0.0.0.0";
+
+static const unsigned char sqlcipherMagic[] = {
+  0xB0, 0x08, 0xA6, 0x79, 0x75, 0x7E, 0x3E, 0x9E, 
+  0xF3, 0x00, 0x58, 0xDD, 0xB8, 0x9D, 0xE2, 0x3B, 
+  0x7D, 0x92, 0xDA, 0xAF, 0xE0, 0x11, 0x0A, 0x5F, 
+  0x05, 0x76, 0x4A, 0xF6, 0xED, 0x9D, 0xE4, 0x84
+};
 
 /* these four sqlite3_file functions account for header allocation */
 static int sqlcipherVfsRead(sqlite3_file*, void*, int iAmt, sqlite3_int64 iOfst);
@@ -33,6 +39,9 @@ static int sqlcipherVfsShmUnmap(sqlite3_file*,int);
 
 static int sqlcipherVfsOpen(sqlite3_vfs*, const char *, sqlite3_file*, int , int *);
 
+#define SQLCIPHER_MAGIC_SZ 32
+#define SQLCIPHER_MIN_HDR_SZ (SQLCIPHER_MAGIC_SZ+sizeof(u32))
+
 /* 
  * Header format:
  * Offset    Size      Description
@@ -47,17 +56,17 @@ static int sqlcipherVfsOpen(sqlite3_vfs*, const char *, sqlite3_file*, int , int
 
 static int sqlcipherVfsReadHeader(sqlcipherVfs_file *file) {
   sqlite_int64 fsize;
-  unsigned char magic[34];
+  unsigned char magic[SQLCIPHER_MIN_HDR_SZ];
   unsigned char *header;
 
   file->use_header = file->needs_write = file->did_read = 0;
 
-  if(file->pReal->pMethods->xRead(file->pReal, magic, 36, 0) == SQLITE_OK) {
+  if(file->pReal->pMethods->xRead(file->pReal, magic, SQLCIPHER_MIN_HDR_SZ, 0) == SQLITE_OK) {
     SQLCIPHER_VFS_TRACE(("peak at first 36 bytes from file header\n"));
     /* file exists and read first 36s, which will include the magic and the full size of the header
      * then compare the first 32 bytes to the magic;
      */
-    if(memcmp(magic, sqlcipherMagic, 32) == 0) {
+    if(memcmp(magic, sqlcipherMagic, SQLCIPHER_MAGIC_SZ) == 0) {
       SQLCIPHER_VFS_TRACE(("file header magic matches setting reserve size to 32\n"));
       file->reserve_sz = sqlite3Get4byte(&magic[32]);
 
@@ -86,7 +95,7 @@ static int sqlcipherVfsReadHeader(sqlcipherVfs_file *file) {
     }
   } else if (file->pReal->pMethods->xFileSize(file->pReal, &fsize) == SQLITE_OK && fsize == 0) {
     SQLCIPHER_VFS_TRACE(("file size is 0, database doesnt exist, setting reserve size\n"));
-    file->reserve_sz = 56;
+    file->reserve_sz = file->pReal->pMethods->xSectorSize(file->pReal); /* header should be aligned to sector */
     file->needs_write = 1;
   } else {
     SQLCIPHER_VFS_TRACE(("unknown issue\n"));
@@ -97,8 +106,8 @@ static int sqlcipherVfsReadHeader(sqlcipherVfs_file *file) {
 
 static int sqlcipherVfsWriteHeader(sqlcipherVfs_file *file) {
   unsigned char *header = sqlcipher_malloc(file->reserve_sz); 
-
-  memcpy(header, sqlcipherMagic, 32);
+  
+  memcpy(header, sqlcipherMagic, SQLCIPHER_MAGIC_SZ);
   sqlite3Put4byte(header+32, file->reserve_sz);
   sqlite3Put4byte(header+36, file->version);
   sqlite3Put4byte(header+40, file->page_sz);
@@ -142,7 +151,7 @@ static int sqlcipherVfsWrite(
 ){
   sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
   SQLCIPHER_VFS_TRACE(("sqlcipherVfsWrite path=%s, iAmt=%d, iOfst=%lld\n", p->filename, iAmt, iOfst));
-  if(p->use_header && p->reserve_sz > 34 && iOfst == 0 && p->needs_write) {
+  if(p->use_header && p->reserve_sz >= SQLCIPHER_MIN_HDR_SZ && iOfst == 0 && p->needs_write) {
     sqlcipherVfsWriteHeader(p);
     p->needs_write = 0;
   } 
