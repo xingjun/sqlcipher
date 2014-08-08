@@ -36,7 +36,8 @@ static int sqlcipherVfsShmLock(sqlite3_file*,int,int,int);
 static int sqlcipherVfsShmMap(sqlite3_file*,int,int,int, void volatile **);
 static void sqlcipherVfsShmBarrier(sqlite3_file*);
 static int sqlcipherVfsShmUnmap(sqlite3_file*,int);
-
+static int sqlcipherVfsFetch(sqlite3_file *pFile, sqlite3_int64 iOfst, int iAmt, void **pp);
+static int sqlcipherVfsUnfetch(sqlite3_file *pFile, sqlite3_int64 iOfst, void *p);
 static int sqlcipherVfsOpen(sqlite3_vfs*, const char *, sqlite3_file*, int , int *);
 
 #define SQLCIPHER_MAGIC_SZ 32
@@ -246,6 +247,15 @@ static int sqlcipherVfsShmUnmap(sqlite3_file *pFile, int delFlag){
   return p->pReal->pMethods->xShmUnmap(p->pReal, delFlag);
 }
 
+static int sqlcipherVfsFetch(sqlite3_file *pFile, sqlite3_int64 iOfst, int iAmt, void **pp){
+  sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
+  return p->pReal->pMethods->xFetch(p->pReal, iOfst + (p->use_header ? p->reserve_sz : 0), iAmt, pp);
+}
+
+static int sqlcipherVfsUnfetch(sqlite3_file *pFile, sqlite3_int64 iOfst, void *block){
+  sqlcipherVfs_file *p = (sqlcipherVfs_file *)pFile;
+  return p->pReal->pMethods->xUnfetch(p->pReal, iOfst + (p->use_header ? p->reserve_sz : 0), block);
+}
 
 static int sqlcipherVfsOpen(
   sqlite3_vfs *pVfs,
@@ -292,6 +302,10 @@ static int sqlcipherVfsOpen(
       pNew->xShmLock = pSub->xShmLock ? sqlcipherVfsShmLock : 0;
       pNew->xShmBarrier = pSub->xShmBarrier ? sqlcipherVfsShmBarrier : 0;
       pNew->xShmUnmap = pSub->xShmUnmap ? sqlcipherVfsShmUnmap : 0;
+    }
+    if( pNew->iVersion>=3 ){
+      pNew->xFetch = pSub->xFetch ? sqlcipherVfsFetch : 0;
+      pNew->xUnfetch = pSub->xUnfetch ? sqlcipherVfsUnfetch : 0;
     }
 
     pFile->pMethods = pNew;

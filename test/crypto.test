@@ -2256,5 +2256,24 @@ do_test can-migrate-with-raw-hex-key {
 db close
 file delete -force test.db
 
+do_test can-query-via-mmap {
+    sqlite_orig db test.db
+    execsql {
+        pragma key = 'test';
+        create table t1(a,b);
+        insert into t1(a,b) values(1,2);
+    }
+    db close
+
+    sqlite_orig db test.db
+    execsql {
+        pragma key = 'test';
+        pragma mmap_size=268435456;
+        select * from t1;
+    }
+} {268435456 1 2}
+db close
+file delete -force test.db
+
 sqlite3_test_control_pending_byte $old_pending_byte
 finish_test
