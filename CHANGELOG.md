@@ -3,16 +3,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased][unreleased]
 
-## [3.3.1] - 2015-07-13
-### Changed
-- Merge upstream SQLite 3.8.10.2
-- Fixed segfault when provided an invalid cipher name
-- Check for codec context when performing `PRAGMA cipher_store_pass`
-- Remove extraneous null check in `PRAGMA cipher_migrate`
-
 ## [3.3.0] - 2015-03-25
 ### Added
-- Added FIPS API calls within the OpenSSL crypto provider
+- Added FIPS API calls within the OpenSSL crpyto provider
 - `PRAGMA cipher_default_page_size` - support for attaching non-default page sizes
 
 ### Changed
@@ -56,8 +49,7 @@ All notable changes to this project will be documented in this file.
 ### Security
 - Change KDF iteration length from 4,000 to 64,000
 
-[unreleased]: https://github.com/sqlcipher/sqlcipher/compare/v3.3.1...prerelease
-[3.3.1]: https://github.com/sqlcipher/sqlcipher/compare/v3.3.0...v3.3.1
+[unreleased]: https://github.com/sqlcipher/sqlcipher/compare/v3.3.0...prerelease
 [3.3.0]: https://github.com/sqlcipher/sqlcipher/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/sqlcipher/sqlcipher/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/sqlcipher/sqlcipher/compare/v3.0.1...v3.1.0

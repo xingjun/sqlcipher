@@ -38,7 +38,6 @@ static void compressFunc(
   unsigned int nIn;
   unsigned long int nOut;
   unsigned char x[8];
-  int rc;
   int i, j;
 
   pIn = sqlite3_value_blob(argv[0]);
@@ -51,12 +50,8 @@ static void compressFunc(
   for(i=0; i<4 && x[i]==0; i++){}
   for(j=0; i<=4; i++, j++) pOut[j] = x[i];
   pOut[j-1] |= 0x80;
-  rc = compress(&pOut[j], &nOut, pIn, nIn);
-  if( rc==Z_OK ){
-    sqlite3_result_blob(context, pOut, nOut+j, sqlite3_free);
-  }else{
-    sqlite3_free(pOut);
-  }
+  compress(&pOut[j], &nOut, pIn, nIn);
+  sqlite3_result_blob(context, pOut, nOut+j, sqlite3_free);
 }
 
 /*
@@ -87,8 +82,6 @@ static void uncompressFunc(
   rc = uncompress(pOut, &nOut, &pIn[i], nIn-i);
   if( rc==Z_OK ){
     sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
-  }else{
-    sqlite3_free(pOut);
   }
 }
 

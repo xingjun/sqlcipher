@@ -84,8 +84,9 @@ char *sqlite3VdbeExpandSql(
   char zBase[100];         /* Initial working space */
 
   db = p->db;
-  sqlite3StrAccumInit(&out, db, zBase, sizeof(zBase), 
+  sqlite3StrAccumInit(&out, zBase, sizeof(zBase), 
                       db->aLimit[SQLITE_LIMIT_LENGTH]);
+  out.db = db;
   if( db->nVdbeExec>1 ){
     while( *zRawSql ){
       const char *zStart = zRawSql;
@@ -94,8 +95,6 @@ char *sqlite3VdbeExpandSql(
       assert( (zRawSql - zStart) > 0 );
       sqlite3StrAccumAppend(&out, zStart, (int)(zRawSql-zStart));
     }
-  }else if( p->nVar==0 ){
-    sqlite3StrAccumAppend(&out, zRawSql, sqlite3Strlen30(zRawSql));
   }else{
     while( zRawSql[0] ){
       n = findNextHostParameter(zRawSql, &nToken);
@@ -112,12 +111,10 @@ char *sqlite3VdbeExpandSql(
           idx = nextIndex;
         }
       }else{
-        assert( zRawSql[0]==':' || zRawSql[0]=='$' ||
-                zRawSql[0]=='@' || zRawSql[0]=='#' );
+        assert( zRawSql[0]==':' || zRawSql[0]=='$' || zRawSql[0]=='@' );
         testcase( zRawSql[0]==':' );
         testcase( zRawSql[0]=='$' );
         testcase( zRawSql[0]=='@' );
-        testcase( zRawSql[0]=='#' );
         idx = sqlite3VdbeParameterIndex(p, zRawSql, nToken);
         assert( idx>0 );
       }

@@ -81,7 +81,7 @@ static int fts3termConnectMethod(
 
   /* The user should specify a single argument - the name of an fts3 table. */
   if( argc!=4 ){
-    sqlite3Fts3ErrMsg(pzErr,
+    *pzErr = sqlite3_mprintf(
         "wrong number of arguments to fts4term constructor"
     );
     return SQLITE_ERROR;

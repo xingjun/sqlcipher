@@ -189,7 +189,7 @@ Expr *sqlite3LimitWhere(
 
   pInClause->x.pSelect = pSelect;
   pInClause->flags |= EP_xIsSelect;
-  sqlite3ExprSetHeightAndFlags(pParse, pInClause);
+  sqlite3ExprSetHeight(pParse, pInClause);
   return pInClause;
 
   /* something went wrong. clean up anything allocated. */

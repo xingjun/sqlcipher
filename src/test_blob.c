@@ -16,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifndef SQLITE_OMIT_INCRBLOB
 
 /* These functions are implemented in main.c. */
 extern const char *sqlite3ErrName(int);
@@ -296,13 +295,12 @@ static int test_blob_write(
 
   return (rc==SQLITE_OK ? TCL_OK : TCL_ERROR);
 }
-#endif /* SQLITE_OMIT_INCRBLOB */
+
 
 /*
 ** Register commands with the TCL interpreter.
 */
 int Sqlitetest_blob_Init(Tcl_Interp *interp){
-#ifndef SQLITE_OMIT_INCRBLOB
   static struct {
      char *zName;
      Tcl_ObjCmdProc *xProc;
@@ -317,6 +315,5 @@ int Sqlitetest_blob_Init(Tcl_Interp *interp){
   for(i=0; i<sizeof(aObjCmd)/sizeof(aObjCmd[0]); i++){
     Tcl_CreateObjCommand(interp, aObjCmd[i].zName, aObjCmd[i].xProc, 0, 0);
   }
-#endif /* SQLITE_OMIT_INCRBLOB */
   return TCL_OK;
 }

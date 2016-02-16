@@ -998,23 +998,6 @@ static void amatchWriteCost(amatch_word *pWord){
   pWord->zCost[8] = 0;
 }
 
-/* Circumvent compiler warnings about the use of strcpy() by supplying
-** our own implementation.
-*/
-#if defined(__OpenBSD__)
-static void amatchStrcpy(char *dest, const char *src){
-  while( (*(dest++) = *(src++))!=0 ){}
-}
-static void amatchStrcat(char *dest, const char *src){
-  while( *dest ) dest++;
-  amatchStrcpy(dest, src);
-}
-#else
-# define amatchStrcpy strcpy
-# define amatchStrcat strcat
-#endif
-
-
 /*
 ** Add a new amatch_word object to the queue.
 **
@@ -1090,7 +1073,7 @@ static void amatchAddWord(
   assert( pOther==0 ); (void)pOther;
   pWord->sWord.zKey = pWord->zWord;
   pWord->sWord.pWord = pWord;
-  amatchStrcpy(pWord->zWord, pCur->zBuf);
+  strcpy(pWord->zWord, pCur->zBuf);
   pOther = amatchAvlInsert(&pCur->pWord, &pWord->sWord);
   assert( pOther==0 ); (void)pOther;
 #ifdef AMATCH_TRACE_1
@@ -1099,7 +1082,6 @@ static void amatchAddWord(
        pWord->zWord, pWord->zCost);
 #endif
 }
-
 
 /*
 ** Advance a cursor to its next row of output
@@ -1166,7 +1148,7 @@ static int amatchNext(sqlite3_vtab_cursor *cur){
       zBuf = sqlite3_realloc(zBuf, nBuf);
       if( zBuf==0 ) return SQLITE_NOMEM;
     }
-    amatchStrcpy(zBuf, pWord->zWord+2);
+    strcpy(zBuf, pWord->zWord+2);
     zNext[0] = 0;
     zNextIn[0] = pCur->zInput[pWord->nMatch];
     if( zNextIn[0] ){
@@ -1181,7 +1163,7 @@ static int amatchNext(sqlite3_vtab_cursor *cur){
 
     if( zNextIn[0] && zNextIn[0]!='*' ){
       sqlite3_reset(p->pVCheck);
-      amatchStrcat(zBuf, zNextIn);
+      strcat(zBuf, zNextIn);
       sqlite3_bind_text(p->pVCheck, 1, zBuf, nWord+nNextIn, SQLITE_STATIC);
       rc = sqlite3_step(p->pVCheck);
       if( rc==SQLITE_ROW ){
@@ -1194,13 +1176,13 @@ static int amatchNext(sqlite3_vtab_cursor *cur){
     }
 
     while( 1 ){
-      amatchStrcpy(zBuf+nWord, zNext);
+      strcpy(zBuf+nWord, zNext);
       sqlite3_reset(p->pVCheck);
       sqlite3_bind_text(p->pVCheck, 1, zBuf, -1, SQLITE_TRANSIENT);
       rc = sqlite3_step(p->pVCheck);
       if( rc!=SQLITE_ROW ) break;
       zW = (const char*)sqlite3_column_text(p->pVCheck, 0);
-      amatchStrcpy(zBuf+nWord, zNext);
+      strcpy(zBuf+nWord, zNext);
       if( strncmp(zW, zBuf, nWord)!=0 ) break;
       if( (zNextIn[0]=='*' && zNextIn[1]==0)
        || (zNextIn[0]==0 && zW[nWord]==0)

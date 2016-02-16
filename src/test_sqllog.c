@@ -365,10 +365,8 @@ static void sqllogOpenlog(struct SLConn *p){
       FILE *fd;
       char *zVar = getenv(ENVIRONMENT_VARIABLE1_NAME);
       if( zVar==0 || strlen(zVar)+10>=(sizeof(sqllogglobal.zPrefix)) ) return;
-      sqlite3_snprintf(sizeof(sqllogglobal.zPrefix), sqllogglobal.zPrefix,
-                        "%s/sqllog_%d", zVar, getProcessId());
-      sqlite3_snprintf(sizeof(sqllogglobal.zIdx), sqllogglobal.zIdx,
-                        "%s.idx", sqllogglobal.zPrefix);
+      sprintf(sqllogglobal.zPrefix, "%s/sqllog_%d", zVar, getProcessId());
+      sprintf(sqllogglobal.zIdx, "%s.idx", sqllogglobal.zPrefix);
       if( getenv(ENVIRONMENT_VARIABLE2_NAME) ){
         sqllogglobal.bReuse = atoi(getenv(ENVIRONMENT_VARIABLE2_NAME));
       }
